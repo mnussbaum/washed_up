@@ -10,27 +10,46 @@ use std::thread::{Builder, JoinHandle};
 use rustc_serialize::json::{Json, ToJson};
 use uuid::Uuid;
 
-pub struct Supervisor {
+pub struct Actor {
+    join_handle: JoinHandle<()>,
+    mailbox: Sender<Json>,
     name: String,
-    actor_mailboxes: HashMap<Uuid, Sender<Json>>,
-    actor_handles: HashMap<Uuid, JoinHandle<()>>,
+    uuid: Uuid,
+}
+
+impl Actor {
+    fn new(
+        join_handle: JoinHandle<()>,
+        mailbox: Sender<Json>,
+        name: String,
+        uuid: Uuid,
+    ) -> Actor {
+        Actor {
+            join_handle: join_handle,
+            mailbox: mailbox,
+            name: name,
+            uuid: uuid,
+        }
+    }
+}
+
+pub struct Supervisor {
+    actors: HashMap<Uuid, Actor>,
+    name: String,
 }
 
 impl Supervisor {
     fn new(name: &str) -> Supervisor {
         Supervisor {
+            actors: HashMap::new(),
             name: name.to_string(),
-            actor_mailboxes: HashMap::new(),
-            actor_handles: HashMap::new(),
         }
     }
 
     fn join(&mut self, pid : Uuid) -> Result<(), String> {
-        match self.actor_handles.remove(&pid) {
-            Some(actor_handle) => {
-                self.actor_mailboxes.remove(&pid).unwrap();
-
-                match actor_handle.join() {
+        match self.actors.remove(&pid) {
+            Some(actor) => {
+                match actor.join_handle.join() {
                     Ok(_) => Ok(()),
                     Err(e) => Err("you really messed up".to_string()),
                 }
@@ -40,9 +59,9 @@ impl Supervisor {
     }
 
     fn send_message(&self, pid: Uuid, message: Json) -> Result<(), String> {
-        match self.actor_mailboxes.get(&pid) {
-            Some(actor_mailbox) => {
-                match actor_mailbox.send(message) {
+        match self.actors.get(&pid) {
+            Some(actor) => {
+                match actor.mailbox.send(message) {
                     Ok(_) => Ok(()),
                     Err(e) => { Err(e.to_string()) },
                 }
@@ -57,13 +76,19 @@ impl Supervisor {
         let (mailbox_sender, mailbox_receiver) = channel();
         let arc_body = Arc::new(Mutex::new(body));
 
-        self.actor_mailboxes.insert(pid, mailbox_sender);
         let actor_handle_result = Builder::new().name(pid.to_string()).spawn(move || {
             arc_body.lock().unwrap()(mailbox_receiver);
         });
 
         match actor_handle_result {
-            Ok(actor_handle) => self.actor_handles.insert(pid, actor_handle),
+            Ok(actor_handle) => {
+                self.actors.insert(pid, Actor::new(
+                    actor_handle,
+                    mailbox_sender,
+                    actor_name.to_string(),
+                    pid,
+                ))
+            }
             Err(e) => return Err("boom"), // sigh
         };
 

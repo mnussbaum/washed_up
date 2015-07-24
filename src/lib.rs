@@ -47,32 +47,42 @@ impl Supervisor {
     }
 
     pub fn join(&self, pid : Uuid) -> Result<(), String> {
-        match self.actors.write().unwrap().remove(&pid) {
-            Some(actor) => {
-                match actor.join_handle.join() {
-                    Ok(_) => Ok(()),
-                    Err(e) => {
-                        if let Some(e) = e.downcast_ref::<&'static str>() {
-                            Err(e.to_string())
-                        } else {
-                            Err(format!("Uknown error joining PID {}", pid.to_string()))
+        match self.actors.write() {
+            Ok(mut actors) => {
+                match actors.remove(&pid) {
+                    Some(actor) => {
+                        match actor.join_handle.join() {
+                            Ok(_) => Ok(()),
+                            Err(e) => {
+                                if let Some(e) = e.downcast_ref::<&'static str>() {
+                                    Err(e.to_string())
+                                } else {
+                                    Err(format!("Uknown error joining PID {}", pid.to_string()))
+                                }
+                            }
                         }
-                    }
+                    },
+                    None => Err(format!("PID {} does not map to a spawned actor", pid.to_string())),
                 }
             },
-            None => Err(format!("PID {} does not map to a spawned actor", pid.to_string())),
+            Err(e) => Err(e.to_string()),
         }
     }
 
     pub fn send_message(&self, pid: Uuid, message: Json) -> Result<(), String> {
-        match self.actors.read().unwrap().get(&pid) {
-            Some(actor) => {
-                match actor.mailbox.send(message) {
-                    Ok(_) => Ok(()),
-                    Err(e) => { Err(e.to_string()) },
+        match self.actors.read() {
+            Ok(actors) => {
+                match actors.get(&pid) {
+                    Some(actor) => {
+                        match actor.mailbox.send(message) {
+                            Ok(_) => Ok(()),
+                            Err(e) => { Err(e.to_string()) },
+                        }
+                    },
+                    None => Err(format!("PID {} does not map to a spawned actor", pid.to_string())),
                 }
             },
-            None => Err(format!("PID {} does not map to a spawned actor", pid.to_string())),
+            Err(e) => Err(e.to_string()),
         }
     }
 

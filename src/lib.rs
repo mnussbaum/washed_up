@@ -1,8 +1,11 @@
+#[macro_use]
+extern crate log;
 extern crate rustc_serialize;
 extern crate chrono;
 extern crate uuid;
 
 use std::collections::HashMap;
+use std::fmt;
 use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{Builder, JoinHandle};
@@ -24,12 +27,21 @@ impl Actor {
         name: String,
         uuid: Uuid,
     ) -> Actor {
-        Actor {
+        let actor = Actor {
             join_handle: join_handle,
             mailbox: mailbox,
             name: name,
             uuid: uuid,
-        }
+        };
+        info!("Instantiating new {:?}", actor);
+
+        actor
+    }
+}
+
+impl fmt::Debug for Actor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Actor {:?} with PID {:?}", self.name, self.uuid)
     }
 }
 
@@ -38,12 +50,21 @@ pub struct Supervisor {
     pub name: String,
 }
 
+impl fmt::Debug for Supervisor {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        write!(f, "Supervisor {:?}", self.name)
+    }
+}
+
 impl Supervisor {
     pub fn new(name: &str) -> Supervisor {
-        Supervisor {
+        let supervisor = Supervisor {
             actors: RwLock::new(HashMap::new()),
             name: name.to_string(),
-        }
+        };
+        info!("Instantiating new {:?}", supervisor);
+
+        supervisor
     }
 
     pub fn join(&self, pid : Uuid) -> Result<(), String> {
@@ -51,21 +72,28 @@ impl Supervisor {
             Ok(mut actors) => {
                 match actors.remove(&pid) {
                     Some(actor) => {
+                        let actor_descriptor = format!("{:?}", actor);
+
                         match actor.join_handle.join() {
                             Ok(_) => Ok(()),
                             Err(e) => {
                                 if let Some(e) = e.downcast_ref::<&'static str>() {
+                                     error!("Error joining {:?}: {:?}", actor_descriptor, e);
                                     Err(e.to_string())
                                 } else {
-                                    Err(format!("Uknown error joining PID {}", pid.to_string()))
+                                    error!("Unknown error joining {:?}", actor_descriptor);
+                                    Err(format!("Uknown error joining {:?}", actor_descriptor))
                                 }
                             }
                         }
                     },
-                    None => Err(format!("PID {} does not map to a spawned actor", pid.to_string())),
+                    None => Err(format!("PID {:?} does not map to a spawned actor", pid.to_string())),
                 }
             },
-            Err(e) => Err(e.to_string()),
+            Err(e) => {
+                error!("Error obtaining actor write lock for {:?}: {:?}", self, e);
+                Err(e.to_string())
+            },
         }
     }
 
@@ -76,13 +104,19 @@ impl Supervisor {
                     Some(actor) => {
                         match actor.mailbox.send(message) {
                             Ok(_) => Ok(()),
-                            Err(e) => { Err(e.to_string()) },
+                            Err(e) => {
+                                error!("Error sending message to {:?}: {:?}", actor, e);
+                                Err(e.to_string())
+                            },
                         }
                     },
-                    None => Err(format!("PID {} does not map to a spawned actor", pid.to_string())),
+                    None => Err(format!("PID {:?} does not map to a spawned actor", pid.to_string())),
                 }
             },
-            Err(e) => Err(e.to_string()),
+            Err(e) => {
+                error!("Error obtaining actor read lock for {:?}: {:?}", self, e);
+                Err(e.to_string())
+            },
         }
     }
 
@@ -109,10 +143,16 @@ impl Supervisor {
 
                         Ok(pid)
                     },
-                    Err(e) => Err(e.to_string()),
+                    Err(e) => {
+                        error!("Error spawning thread for {:?}: {:?}", actor_name, e);
+                        Err(e.to_string())
+                    },
                 }
             },
-            Err(e) => Err(e.to_string())
+            Err(e) => {
+                error!("Error obtaining actor write lock for {:?}: {:?}", self, e);
+                Err(e.to_string())
+            },
         }
     }
 }
@@ -164,7 +204,7 @@ mod tests {
 
         match send_result {
             Ok(_) => panic!("Message sent to non-existent PID"),
-            Err(e) => assert_eq!(e, format!("PID {} does not map to a spawned actor", pid.to_string())),
+            Err(e) => assert_eq!(e, format!("PID {:?} does not map to a spawned actor", pid.to_string())),
         }
     }
 
@@ -176,7 +216,7 @@ mod tests {
             |r| { r.recv().unwrap(); () }
         ).unwrap();
 
-        supervisor.send_message(pid, "{}".to_json()).unwrap();
+        supervisor.send_message(pid, "{:?}".to_json()).unwrap();
     }
 
     // join tests
@@ -208,7 +248,7 @@ mod tests {
 
         match send_result {
             Ok(_) => panic!("Message sent to non-existent PID"),
-            Err(e) => assert_eq!(e, format!("PID {} does not map to a spawned actor", pid.to_string())),
+            Err(e) => assert_eq!(e, format!("PID {:?} does not map to a spawned actor", pid.to_string())),
         }
     }
 
@@ -221,7 +261,7 @@ mod tests {
 
         match join_result {
             Ok(_) => panic!("Actor joined for non-existent PID"),
-            Err(e) => assert_eq!(e, format!("PID {} does not map to a spawned actor", pid.to_string())),
+            Err(e) => assert_eq!(e, format!("PID {:?} does not map to a spawned actor", pid.to_string())),
         }
     }
 }

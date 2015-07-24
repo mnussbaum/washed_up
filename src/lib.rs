@@ -51,7 +51,13 @@ impl Supervisor {
             Some(actor) => {
                 match actor.join_handle.join() {
                     Ok(_) => Ok(()),
-                    Err(e) => Err("you really messed up".to_string()),
+                    Err(e) => {
+                        if let Some(e) = e.downcast_ref::<&'static str>() {
+                            Err(e.to_string())
+                        } else {
+                            Err(format!("Uknown error joining PID {}", pid.to_string()))
+                        }
+                    }
                 }
             },
             None => Err(format!("PID {} does not map to a spawned actor", pid.to_string())),
@@ -70,7 +76,7 @@ impl Supervisor {
         }
     }
 
-    fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid, &str>
+    fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid, String>
         where F : 'static + Send + Fn(Receiver<Json>) -> () {
         let pid = Uuid::new_v4();
         let (mailbox_sender, mailbox_receiver) = channel();
@@ -93,10 +99,10 @@ impl Supervisor {
 
                         Ok(pid)
                     },
-                    Err(e) => Err("boom"), // sigh
+                    Err(e) => Err(e.to_string()),
                 }
             },
-            Err(e) => Err("boom boom") // sigh
+            Err(e) => Err(e.to_string())
         }
     }
 }

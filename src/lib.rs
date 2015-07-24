@@ -2,6 +2,7 @@ extern crate rustc_serialize;
 extern crate uuid;
 
 use std::collections::HashMap;
+use std::sync::{Arc, Mutex};
 use std::sync::mpsc::{channel, Receiver, Sender, SendError};
 use std::thread;
 
@@ -22,12 +23,15 @@ impl Supervisor {
     }
 
     fn spawn_actor<F>(&mut self, actor_name: &str, body: F) -> Result<Uuid, &str>
-        where F : Fn(Receiver<Json>) -> () {
+        where F : 'static + Send + Fn(Receiver<Json>) -> () {
         let pid = Uuid::new_v4();
         let (mailbox_sender, mailbox_receiver) = channel();
+        let arc_body = Arc::new(Mutex::new(body));
 
         self.spawned_actors.insert(pid, mailbox_sender);
-        body(mailbox_receiver);
+        thread::Builder::new().name(pid.to_string()).spawn(move || {
+            arc_body.lock().unwrap()(mailbox_receiver);
+        });
         return Ok(pid);
     }
 
@@ -46,6 +50,8 @@ impl Supervisor {
 
 #[cfg(test)]
 mod tests {
+    use std::fs::{remove_file, File};
+    use std::io::prelude::*;
     use std::sync::mpsc::{channel, Receiver, Sender};
     use std::thread;
     use rustc_serialize::json::{Json, ToJson};
@@ -70,26 +76,35 @@ mod tests {
         let mut supervisor = Supervisor::new("folks");
         let pid: Uuid = supervisor.spawn_actor(
             "Bob",
-            |r| { thread::spawn(move || { r.recv().unwrap() }); () }
+            |r| { r.recv().unwrap(); () }
         ).unwrap();
 
         supervisor.send_message(pid, "{}".to_json()).unwrap();
     }
 
-    // #[test]
-    // fn the_body_actor_callback_is_executed() {
-    //     let mut supervisor = Supervisor::new("folks");
-    //     let json_msg = "{\"hi\": \"friend\"}".to_json();
-    //     let json_clone = json_msg.clone();
-    //     let (send_chan, recv_chan) = channel();
-    //     let pid: Uuid = supervisor.spawn_actor(
-    //         "Bob",
-    //         |receiver| { send_chan.send(receiver.recv().unwrap().to_json()); () }
-    //     ).unwrap();
-    //
-    //     supervisor.send_message(pid, json_msg).unwrap();
-    //
-    //     thread::sleep_ms(100);
-    //     assert_eq!(recv_chan.try_recv().unwrap(), json_clone);
-    // }
+    #[test]
+    fn the_body_actor_callback_is_executed() {
+        let mut supervisor = Supervisor::new("folks");
+        let json_msg = "{\"hi\": \"friend\"}".to_json();
+        let json_clone = json_msg.clone();
+        let pid_bob: Uuid = supervisor.spawn_actor(
+            "Bob",
+            |receiver| {
+                let mut message_output_file = File::create("/tmp/bob-test.json").unwrap();
+                message_output_file.write_all(receiver.recv().unwrap().to_string().as_bytes()).unwrap();
+                ()
+            }
+        ).unwrap();
+
+        supervisor.send_message(pid_bob, json_msg).unwrap();
+
+        thread::sleep_ms(1001);
+        let mut message_output_file = File::open("/tmp/bob-test.json").unwrap();
+        let mut message_output = String::new();
+        message_output_file.read_to_string(&mut message_output).unwrap();
+        remove_file("/tmp/bob-test.json").unwrap();
+
+        let actual_json = Json::from_str(&message_output).unwrap();
+        assert_eq!(json_clone, actual_json);
+    }
 }

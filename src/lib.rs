@@ -4,10 +4,10 @@ extern crate uuid;
 
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, RwLock};
-use std::sync::mpsc::{channel, Receiver, Sender, SendError};
+use std::sync::mpsc::{channel, Receiver, Sender};
 use std::thread::{Builder, JoinHandle};
 
-use rustc_serialize::json::{Json, ToJson};
+use rustc_serialize::json::{Json};
 use uuid::Uuid;
 
 pub struct Actor {
@@ -35,18 +35,18 @@ impl Actor {
 
 pub struct Supervisor {
     actors: RwLock<HashMap<Uuid, Actor>>,
-    name: String,
+    pub name: String,
 }
 
 impl Supervisor {
-    fn new(name: &str) -> Supervisor {
+    pub fn new(name: &str) -> Supervisor {
         Supervisor {
             actors: RwLock::new(HashMap::new()),
             name: name.to_string(),
         }
     }
 
-    fn join(&self, pid : Uuid) -> Result<(), String> {
+    pub fn join(&self, pid : Uuid) -> Result<(), String> {
         match self.actors.write().unwrap().remove(&pid) {
             Some(actor) => {
                 match actor.join_handle.join() {
@@ -64,7 +64,7 @@ impl Supervisor {
         }
     }
 
-    fn send_message(&self, pid: Uuid, message: Json) -> Result<(), String> {
+    pub fn send_message(&self, pid: Uuid, message: Json) -> Result<(), String> {
         match self.actors.read().unwrap().get(&pid) {
             Some(actor) => {
                 match actor.mailbox.send(message) {
@@ -76,7 +76,7 @@ impl Supervisor {
         }
     }
 
-    fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid, String>
+    pub fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid, String>
         where F : 'static + Send + Fn(Receiver<Json>) -> () {
         let pid = Uuid::new_v4();
         let (mailbox_sender, mailbox_receiver) = channel();
@@ -111,7 +111,6 @@ impl Supervisor {
 mod tests {
     use std::fs::{remove_file, File};
     use std::io::prelude::*;
-    use std::sync::mpsc::{channel, Receiver, Sender};
     use std::thread;
     use chrono::*;
     use rustc_serialize::json::{Json, ToJson};
@@ -177,7 +176,7 @@ mod tests {
         let start_time = UTC::now();
         let pid: Uuid = supervisor.spawn(
             "Bob",
-            |r| { thread::sleep_ms(1000); () }
+            |_| { thread::sleep_ms(1000); () }
         ).unwrap();
         assert!((start_time + Duration::milliseconds(1000)) > UTC::now());
 
@@ -191,7 +190,7 @@ mod tests {
         let supervisor = Supervisor::new("folks");
         let pid: Uuid = supervisor.spawn(
             "Bob",
-            |r| { () }
+            |_| { () }
         ).unwrap();
         supervisor.join(pid).unwrap();
 

@@ -3,7 +3,7 @@ extern crate chrono;
 extern crate uuid;
 
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex};
+use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::{channel, Receiver, Sender, SendError};
 use std::thread::{Builder, JoinHandle};
 
@@ -34,20 +34,20 @@ impl Actor {
 }
 
 pub struct Supervisor {
-    actors: HashMap<Uuid, Actor>,
+    actors: RwLock<HashMap<Uuid, Actor>>,
     name: String,
 }
 
 impl Supervisor {
     fn new(name: &str) -> Supervisor {
         Supervisor {
-            actors: HashMap::new(),
+            actors: RwLock::new(HashMap::new()),
             name: name.to_string(),
         }
     }
 
-    fn join(&mut self, pid : Uuid) -> Result<(), String> {
-        match self.actors.remove(&pid) {
+    fn join(&self, pid : Uuid) -> Result<(), String> {
+        match self.actors.write().unwrap().remove(&pid) {
             Some(actor) => {
                 match actor.join_handle.join() {
                     Ok(_) => Ok(()),
@@ -59,7 +59,7 @@ impl Supervisor {
     }
 
     fn send_message(&self, pid: Uuid, message: Json) -> Result<(), String> {
-        match self.actors.get(&pid) {
+        match self.actors.read().unwrap().get(&pid) {
             Some(actor) => {
                 match actor.mailbox.send(message) {
                     Ok(_) => Ok(()),
@@ -70,29 +70,34 @@ impl Supervisor {
         }
     }
 
-    fn spawn<F>(&mut self, actor_name: &str, body: F) -> Result<Uuid, &str>
+    fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid, &str>
         where F : 'static + Send + Fn(Receiver<Json>) -> () {
         let pid = Uuid::new_v4();
         let (mailbox_sender, mailbox_receiver) = channel();
         let arc_body = Arc::new(Mutex::new(body));
 
-        let actor_handle_result = Builder::new().name(pid.to_string()).spawn(move || {
-            arc_body.lock().unwrap()(mailbox_receiver);
-        });
+        match self.actors.write() {
+            Ok(mut actors) => {
+                let actor_handle_result = Builder::new().name(pid.to_string()).spawn(move || {
+                    arc_body.lock().unwrap()(mailbox_receiver);
+                });
 
-        match actor_handle_result {
-            Ok(actor_handle) => {
-                self.actors.insert(pid, Actor::new(
-                    actor_handle,
-                    mailbox_sender,
-                    actor_name.to_string(),
-                    pid,
-                ))
-            }
-            Err(e) => return Err("boom"), // sigh
-        };
+                match actor_handle_result {
+                    Ok(actor_handle) => {
+                        actors.insert(pid, Actor::new(
+                            actor_handle,
+                            mailbox_sender,
+                            actor_name.to_string(),
+                            pid,
+                        ));
 
-        return Ok(pid);
+                        Ok(pid)
+                    },
+                    Err(e) => Err("boom"), // sigh
+                }
+            },
+            Err(e) => Err("boom boom") // sigh
+        }
     }
 }
 
@@ -110,7 +115,7 @@ mod tests {
     // spawn tests
     #[test]
     fn the_body_actor_callback_is_executed() {
-        let mut supervisor = Supervisor::new("folks");
+        let supervisor = Supervisor::new("folks");
         let json_msg = "{\"hi\": \"friend\"}".to_json();
         let json_clone = json_msg.clone();
         let pid_bob: Uuid = supervisor.spawn(
@@ -137,7 +142,7 @@ mod tests {
     // send_message tests
     #[test]
     fn error_is_returned_if_message_sent_for_pid_that_does_not_exist() {
-        let mut supervisor = Supervisor::new("folks");
+        let supervisor = Supervisor::new("folks");
         let pid = Uuid::new_v4();
 
         let send_result = supervisor.send_message(pid, "{}".to_json());
@@ -150,7 +155,7 @@ mod tests {
 
     #[test]
     fn pid_can_be_used_to_send_message() {
-        let mut supervisor = Supervisor::new("folks");
+        let supervisor = Supervisor::new("folks");
         let pid: Uuid = supervisor.spawn(
             "Bob",
             |r| { r.recv().unwrap(); () }
@@ -162,7 +167,7 @@ mod tests {
     // join tests
     #[test]
     fn pid_can_be_used_to_join_actor() {
-        let mut supervisor = Supervisor::new("folks");
+        let supervisor = Supervisor::new("folks");
         let start_time = UTC::now();
         let pid: Uuid = supervisor.spawn(
             "Bob",
@@ -177,7 +182,7 @@ mod tests {
 
     #[test]
     fn joining_actor_makes_it_unreachable() {
-        let mut supervisor = Supervisor::new("folks");
+        let supervisor = Supervisor::new("folks");
         let pid: Uuid = supervisor.spawn(
             "Bob",
             |r| { () }
@@ -194,7 +199,7 @@ mod tests {
 
     #[test]
     fn error_is_returned_if_joining_actor_that_does_not_exist() {
-        let mut supervisor = Supervisor::new("folks");
+        let supervisor = Supervisor::new("folks");
         let pid = Uuid::new_v4();
 
         let join_result = supervisor.join(pid);

@@ -1,20 +1,23 @@
 #[macro_use]
+extern crate chrono;
+extern crate coroutine;
+#[macro_use]
 extern crate log;
 extern crate rustc_serialize;
-extern crate chrono;
 extern crate uuid;
 
 use std::collections::HashMap;
 use std::fmt;
 use std::sync::{Arc, Mutex, RwLock};
 use std::sync::mpsc::{channel, Receiver, Sender};
-use std::thread::{Builder, JoinHandle};
 
+use coroutine::builder::Builder;
+use coroutine::Handle;
 use rustc_serialize::json::{Json};
 use uuid::Uuid;
 
 pub struct Actor {
-    join_handle: JoinHandle<()>,
+    join_handle: Handle,
     mailbox: Sender<Json>,
     name: String,
     uuid: Uuid,
@@ -22,7 +25,7 @@ pub struct Actor {
 
 impl Actor {
     fn new(
-        join_handle: JoinHandle<()>,
+        join_handle: Handle,
         mailbox: Sender<Json>,
         name: String,
         uuid: Uuid,
@@ -77,13 +80,8 @@ impl Supervisor {
                         match actor.join_handle.join() {
                             Ok(_) => Ok(()),
                             Err(e) => {
-                                if let Some(e) = e.downcast_ref::<&'static str>() {
-                                     error!("Error joining {:?}: {:?}", actor_descriptor, e);
-                                    Err(e.to_string())
-                                } else {
-                                    error!("Unknown error joining {:?}", actor_descriptor);
-                                    Err(format!("Uknown error joining {:?}", actor_descriptor))
-                                }
+                                error!("Error joining {:?}: {:?}", actor_descriptor, e);
+                                Err(format!("Error joining {:?}: {:?}", actor_descriptor, e))
                             }
                         }
                     },
@@ -103,7 +101,15 @@ impl Supervisor {
                 match actors.get(&pid) {
                     Some(actor) => {
                         match actor.mailbox.send(message) {
-                            Ok(_) => Ok(()),
+                            Ok(_) => {
+                                match actor.join_handle.resume() {
+                                    Ok(_) => Ok(()),
+                                    Err(e) => {
+                                        error!("Error resuming {:?}: {:?}", actor, e);
+                                        Err(format!("{:?}", e))
+                                    }
+                                }
+                            },
                             Err(e) => {
                                 error!("Error sending message to {:?}: {:?}", actor, e);
                                 Err(e.to_string())
@@ -128,26 +134,18 @@ impl Supervisor {
 
         match self.actors.write() {
             Ok(mut actors) => {
-                let actor_handle_result = Builder::new().name(pid.to_string()).spawn(move || {
+                let actor_handle = Builder::new().name(pid.to_string()).spawn(move || {
                     arc_body.lock().unwrap()(mailbox_receiver);
                 });
 
-                match actor_handle_result {
-                    Ok(actor_handle) => {
-                        actors.insert(pid, Actor::new(
-                            actor_handle,
-                            mailbox_sender,
-                            actor_name.to_string(),
-                            pid,
-                        ));
+                actors.insert(pid, Actor::new(
+                    actor_handle,
+                    mailbox_sender,
+                    actor_name.to_string(),
+                    pid,
+                ));
 
-                        Ok(pid)
-                    },
-                    Err(e) => {
-                        error!("Error spawning thread for {:?}: {:?}", actor_name, e);
-                        Err(e.to_string())
-                    },
-                }
+                Ok(pid)
             },
             Err(e) => {
                 error!("Error obtaining actor write lock for {:?}: {:?}", self, e);
@@ -163,6 +161,7 @@ mod tests {
     use std::io::prelude::*;
     use std::thread;
     use chrono::*;
+    use coroutine::Coroutine;
     use rustc_serialize::json::{Json, ToJson};
     use uuid::Uuid;
     use super::*;
@@ -192,6 +191,49 @@ mod tests {
 
         let actual_json = Json::from_str(&message_output).unwrap();
         assert_eq!(json_clone, actual_json);
+    }
+
+    #[test]
+    fn actor_body_is_executed_for_every_message() {
+        let supervisor = Supervisor::new("folks");
+        let json_msg = "{\"hi\": \"friend\"}".to_json();
+        let json_clone = json_msg.clone();
+        let pid_steve: Uuid = supervisor.spawn(
+            "steve",
+            |receiver| {
+                for i in (0..2) {
+                    let m  =receiver.recv().unwrap().to_string();
+                    let mut message_output_file = File::create("/tmp/steve-test.json").unwrap();
+                    message_output_file.write_all(m.as_bytes()).unwrap();
+                    Coroutine::sched();
+                }
+                ()
+            }
+        ).unwrap();
+
+        supervisor.send_message(pid_steve, json_msg).unwrap();
+
+        thread::sleep_ms(1001);
+        let mut message_output_file = File::open("/tmp/steve-test.json").unwrap();
+        let mut message_output = String::new();
+        message_output_file.read_to_string(&mut message_output).unwrap();
+        remove_file("/tmp/steve-test.json").unwrap();
+
+        let actual_json = Json::from_str(&message_output).unwrap();
+        assert_eq!(json_clone, actual_json);
+
+        let json_msg2 = "{\"imnot\": \"yourfriend\"}".to_json();
+        let json_clone2 = json_msg2.clone();
+        supervisor.send_message(pid_steve, json_msg2).unwrap();
+
+        thread::sleep_ms(1001);
+        let mut message_output_file = File::open("/tmp/steve-test.json").unwrap();
+        let mut message_output = String::new();
+        message_output_file.read_to_string(&mut message_output).unwrap();
+        remove_file("/tmp/steve-test.json").unwrap();
+
+        let actual_json = Json::from_str(&message_output).unwrap();
+        assert_eq!(json_clone2, actual_json);
     }
 
     // send_message tests

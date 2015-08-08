@@ -6,6 +6,7 @@ authors = ["mnussbaum <michaelnussbaum08@gmail.com>"]
 [dependencies]
 
 chrono = "0.2"
+coroutine = "*"
 log = "0.3.1"
 rustc-serialize = "0.3"
 uuid = "0.1"

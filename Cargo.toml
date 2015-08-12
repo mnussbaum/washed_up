@@ -2,6 +2,12 @@
 name = "washed_up"
 version = "0.1.0"
 authors = ["mnussbaum <michaelnussbaum08@gmail.com>"]
+description = "A toy actor library"
+readme = "README.md"
+license = "MIT"
+repository = "https://github.com/mnussbaum/washed_up"
+keywords = ["actor", "concurrency"]
+
 
 [dependencies]
 
@@ -10,3 +16,7 @@ coroutine = "*"
 log = "0.3.1"
 rustc-serialize = "0.3"
 uuid = "0.1"
+
+[lib]
+path = "src/lib.rs"
+test = true

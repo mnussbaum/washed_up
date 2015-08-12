@@ -72,3 +72,5 @@ Dependencies you will probably need to pull in:
 * [coroutine](https://github.com/rustcc/coroutine-rs)
 * [uuid](https://github.com/rust-lang/uuid)
 * [rustc-serialize](https://github.com/rust-lang/rustc-serialize)
+
+The coroutine library requires Rust nightly, so this library does as well.

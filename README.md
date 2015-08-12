@@ -1,5 +1,7 @@
 `washed_up` is a toy actor library for Rust.
 
+[![Build Status](https://travis-ci.org/mnussbaum/washed_up.svg)](https://travis-ci.org/mnussbaum/washed_up)
+
 This actor library provides:
   * Light weight "green" threads
   * Message passing semantics

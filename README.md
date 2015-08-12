@@ -43,6 +43,9 @@ fn main() {
                     break;
                 }
                 println!("Received: {}", message);
+
+                // This yields control to the scheduler so other actors can run.
+                // Execution will resume right where it left off
                 Coroutine::sched();
             }
             ()

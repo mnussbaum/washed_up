@@ -12,7 +12,7 @@ keywords = ["actor", "concurrency"]
 [dependencies]
 
 chrono = "0.2"
-coroutine = "*"
+coroutine = "0.3.2"
 log = "0.3.1"
 rustc-serialize = "0.3"
 uuid = "0.1"

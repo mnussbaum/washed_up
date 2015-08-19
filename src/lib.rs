@@ -1,9 +1,8 @@
-#[macro_use]
-extern crate chrono;
 extern crate coroutine;
 #[macro_use]
 extern crate log;
 extern crate rustc_serialize;
+extern crate time;
 extern crate uuid;
 
 use std::collections::HashMap;
@@ -160,7 +159,7 @@ mod tests {
     use std::fs::{remove_file, File};
     use std::io::prelude::*;
     use std::thread;
-    use chrono::*;
+    use time::{now, Duration};
     use coroutine::Coroutine;
     use rustc_serialize::json::{Json, ToJson};
     use uuid::Uuid;
@@ -265,16 +264,16 @@ mod tests {
     #[test]
     fn pid_can_be_used_to_join_actor() {
         let supervisor = Supervisor::new("folks");
-        let start_time = UTC::now();
+        let start_time = now();
         let pid: Uuid = supervisor.spawn(
             "Bob",
             |_| { thread::sleep_ms(1000); () }
         ).unwrap();
-        assert!((start_time + Duration::milliseconds(1000)) > UTC::now());
+        assert!((start_time + Duration::milliseconds(1000)) > now());
 
         supervisor.join(pid).unwrap();
 
-        assert!((start_time + Duration::milliseconds(1000)) < UTC::now());
+        assert!((start_time + Duration::milliseconds(1000)) < now());
     }
 
     #[test]

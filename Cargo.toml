@@ -11,10 +11,10 @@ keywords = ["actor", "concurrency"]
 
 [dependencies]
 
-chrono = "0.2"
 coroutine = { git = "https://github.com/rustcc/coroutine-rs.git" }
 log = "0.3.1"
 rustc-serialize = "0.3"
+time = "0.1.32"
 uuid = "0.1"
 
 [lib]

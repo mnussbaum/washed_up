@@ -201,8 +201,8 @@ mod tests {
         let pid_steve: Uuid = supervisor.spawn(
             "steve",
             |receiver| {
-                for i in (0..2) {
-                    let m  =receiver.recv().unwrap().to_string();
+                for _ in (0..2) {
+                    let m = receiver.recv().unwrap().to_string();
                     let mut message_output_file = File::create("/tmp/steve-test.json").unwrap();
                     message_output_file.write_all(m.as_bytes()).unwrap();
                     Coroutine::sched();

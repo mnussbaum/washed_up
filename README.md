@@ -1,6 +1,9 @@
-`washed_up` is a toy actor library for Rust.
-
 [![Build Status](https://travis-ci.org/mnussbaum/washed_up.svg)](https://travis-ci.org/mnussbaum/washed_up)
+[![Crates.io Status](http://meritbadge.herokuapp.com/washed_up)](https://crates.io/crates/washed_up)
+
+# washed_up
+
+A toy actor library for Rust.
 
 This actor library provides:
   * Light weight "green" threads
@@ -69,7 +72,6 @@ Your actor body function must have the following signature:
 ```rust
 Fn(std::sync::mpsc::Receiver<Json>) -> ()
 ```
-
 Dependencies you will probably need to pull in:
 * [coroutine](https://github.com/rustcc/coroutine-rs)
 * [uuid](https://github.com/rust-lang/uuid)

@@ -20,3 +20,7 @@ uuid = "0.1"
 [lib]
 path = "src/lib.rs"
 test = true
+
+[[test]]
+name = "test"
+path = "test/test.rs"

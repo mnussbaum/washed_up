@@ -5,6 +5,7 @@ extern crate uuid;
 
 extern crate washed_up;
 
+use std::error::Error;
 use std::fs::{
     remove_file,
     File,
@@ -105,7 +106,7 @@ fn error_is_returned_if_message_sent_for_pid_that_does_not_exist() {
 
     match send_result {
         Ok(_) => panic!("Message sent to non-existent PID"),
-        Err(e) => assert_eq!(e, format!("PID {:?} does not map to a spawned actor", pid.to_string())),
+        Err(e) => assert_eq!(e.description(), "PID does not map to a spawned actor"),
     }
 }
 
@@ -149,7 +150,7 @@ fn joining_actor_makes_it_unreachable() {
 
     match send_result {
         Ok(_) => panic!("Message sent to non-existent PID"),
-        Err(e) => assert_eq!(e, format!("PID {:?} does not map to a spawned actor", pid.to_string())),
+        Err(e) => assert_eq!(e.description(), "PID does not map to a spawned actor"),
     }
 }
 
@@ -162,6 +163,6 @@ fn error_is_returned_if_joining_actor_that_does_not_exist() {
 
     match join_result {
         Ok(_) => panic!("Actor joined for non-existent PID"),
-        Err(e) => assert_eq!(e, format!("PID {:?} does not map to a spawned actor", pid.to_string())),
+        Err(e) => assert_eq!(e.description(), "PID does not map to a spawned actor"),
     }
 }

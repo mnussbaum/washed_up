@@ -7,5 +7,8 @@ extern crate uuid;
 pub mod actor;
 pub use actor::Actor;
 
+pub mod error;
+pub use error::WashedUpError;
+
 pub mod supervisor;
 pub use supervisor::Supervisor;

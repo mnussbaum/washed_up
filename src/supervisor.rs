@@ -21,6 +21,7 @@ use rustc_serialize::json::{
 };
 use uuid::Uuid;
 
+use Result;
 use actor::Actor;
 use error::WashedUpError;
 
@@ -47,7 +48,7 @@ impl Supervisor {
         supervisor
     }
 
-    pub fn join(&self, pid : Uuid) -> Result<State, WashedUpError> {
+    pub fn join(&self, pid : Uuid) -> Result<State> {
         let mut actors = try!(self.actors.write());
         match actors.remove(&pid) {
             Some(actor) => {
@@ -57,7 +58,7 @@ impl Supervisor {
         }
     }
 
-    pub fn send_message(&self, pid: Uuid, message: Json) -> Result<(), WashedUpError> {
+    pub fn send_message(&self, pid: Uuid, message: Json) -> Result<()> {
         let actors = try!(self.actors.read());
         match actors.get(&pid) {
             Some(actor) => {
@@ -69,7 +70,7 @@ impl Supervisor {
         }
     }
 
-    pub fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid, WashedUpError>
+    pub fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid>
         where F : 'static + Send + Fn(Receiver<Json>) -> () {
         let pid = Uuid::new_v4();
         let (mailbox_sender, mailbox_receiver) = channel();

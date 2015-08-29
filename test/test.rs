@@ -16,12 +16,17 @@ use time::{
     now,
     Duration
 };
-use coroutine::Coroutine;
+use coroutine::{
+    Coroutine,
+    State,
+};
 use rustc_serialize::json::{
     Json,
     ToJson,
 };
 use uuid::Uuid;
+
+use washed_up::Result as WashedUpResult;
 use washed_up::supervisor::{
     Supervisor,
 };
@@ -159,7 +164,7 @@ fn error_is_returned_if_joining_actor_that_does_not_exist() {
     let supervisor = Supervisor::new("folks");
     let pid = Uuid::new_v4();
 
-    let join_result = supervisor.join(pid);
+    let join_result: WashedUpResult<State>= supervisor.join(pid);
 
     match join_result {
         Ok(_) => panic!("Actor joined for non-existent PID"),

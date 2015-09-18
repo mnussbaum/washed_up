@@ -1,3 +1,4 @@
+use std::any::Any;
 use std::collections::{
     HashMap,
 };
@@ -14,7 +15,6 @@ use std::sync::mpsc::{
     SendError,
 };
 
-use coroutine::Error as CoroutineError;
 use rustc_serialize::json::{
     Json,
 };
@@ -27,7 +27,7 @@ pub enum WashedUpError<'a> {
     ActorReadLockPoisoned(PoisonError<RwLockReadGuard<'a, HashMap<Uuid, Actor>>>),
     ActorSendError(SendError<Json>),
     ActorWriteLockPoisoned(PoisonError<RwLockWriteGuard<'a, HashMap<Uuid, Actor>>>),
-    Coroutine(CoroutineError),
+    ActorPanic(&'a str),
     InvalidPid(Uuid),
 }
 
@@ -41,7 +41,7 @@ impl<'a> WashedUpError<'a> {
             WashedUpError::ActorWriteLockPoisoned(_) => {
                 "Supervisor's actor write lock poisoned"
             },
-            WashedUpError::Coroutine(ref err) => err.description(),
+            WashedUpError::ActorPanic(ref err_as_string) => err_as_string,
             WashedUpError::InvalidPid(_) => {
                 "PID does not map to a spawned actor"
             },
@@ -59,7 +59,7 @@ impl<'a> Error for WashedUpError<'a> {
             WashedUpError::ActorReadLockPoisoned(_) => None,
             WashedUpError::ActorSendError(ref err) => Some(err),
             WashedUpError::ActorWriteLockPoisoned(_) => None,
-            WashedUpError::Coroutine(ref err) => Some(err),
+            WashedUpError::ActorPanic(_) => None,
             WashedUpError::InvalidPid(_) => None,
         }
     }
@@ -71,9 +71,16 @@ impl<'a> fmt::Display for WashedUpError<'a> {
     }
 }
 
-impl<'a> From<CoroutineError> for WashedUpError<'a> {
-    fn from(err: CoroutineError) -> WashedUpError<'a> {
-        WashedUpError::Coroutine(err)
+impl<'a> From<Box<Any + Send>> for WashedUpError<'a> {
+    fn from(maybe_err: Box<Any + Send>) -> WashedUpError<'a> {
+         match maybe_err.downcast_ref::<&str>() {
+             Some(err_as_string) => {
+                 WashedUpError::ActorPanic(err_as_string)
+             },
+             None => {
+                 WashedUpError::ActorPanic("Unknown panic in actor")
+             }
+         }
     }
 }
 

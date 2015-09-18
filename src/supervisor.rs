@@ -4,17 +4,18 @@ use std::collections::{
 use std::fmt;
 use std::sync::{
     Arc,
-    Mutex,
     RwLock,
 };
-use std::sync::mpsc::{
+
+use coio::{
+    Builder,
+};
+use coio::sync::{
+    Mutex,
+};
+use coio::sync::mpsc::{
     channel,
     Receiver,
-};
-
-use coroutine::{
-    builder,
-    State,
 };
 use rustc_serialize::json::{
     Json,
@@ -48,7 +49,7 @@ impl Supervisor {
         supervisor
     }
 
-    pub fn join(&self, pid : Uuid) -> Result<State> {
+    pub fn join(&self, pid : Uuid) -> Result<()> {
         let mut actors = try!(self.actors.write());
         match actors.remove(&pid) {
             Some(actor) => {
@@ -62,22 +63,20 @@ impl Supervisor {
         let actors = try!(self.actors.read());
         match actors.get(&pid) {
             Some(actor) => {
-                try!(actor.mailbox.send(message));
-                try!(actor.join_handle.resume());
-                Ok(())
+                Ok(try!(actor.mailbox.send(message)))
             },
             None => Err(WashedUpError::InvalidPid(pid)),
         }
     }
 
     pub fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid>
-        where F : 'static + Send + Fn(Receiver<Json>) -> () {
+        where F : 'static + Sync + Send + Fn(Receiver<Json>) -> () {
         let pid = Uuid::new_v4();
         let (mailbox_sender, mailbox_receiver) = channel();
         let arc_body = Arc::new(Mutex::new(body));
 
         let mut actors = try!(self.actors.write());
-        let actor_handle = builder::Builder::new().name(pid.to_string()).spawn(move || {
+        let actor_handle = Builder::new().name(Some(pid.to_string())).spawn(move || {
             arc_body.lock().unwrap()(mailbox_receiver);
         });
 

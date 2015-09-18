@@ -1,4 +1,4 @@
-extern crate coroutine;
+extern crate coio;
 extern crate rustc_serialize;
 extern crate time;
 extern crate uuid;
@@ -16,9 +16,8 @@ use time::{
     now,
     Duration
 };
-use coroutine::{
-    Coroutine,
-    State,
+use coio::{
+    run,
 };
 use rustc_serialize::json::{
     Json,
@@ -47,6 +46,7 @@ fn the_body_actor_callback_is_executed() {
     ).unwrap();
 
     supervisor.send_message(pid_bob, json_msg).unwrap();
+    run(1);
 
     thread::sleep_ms(1001);
     let mut message_output_file = File::open("/tmp/bob-test.json").unwrap();
@@ -62,7 +62,6 @@ fn the_body_actor_callback_is_executed() {
 fn actor_body_is_executed_for_every_message() {
     let supervisor = Supervisor::new("folks");
     let json_msg = "{\"hi\": \"friend\"}".to_json();
-    let json_clone = json_msg.clone();
     let pid_steve: Uuid = supervisor.spawn(
         "steve",
         |receiver| {
@@ -70,7 +69,6 @@ fn actor_body_is_executed_for_every_message() {
                 let m = receiver.recv().unwrap().to_string();
                 let mut message_output_file = File::create("/tmp/steve-test.json").unwrap();
                 message_output_file.write_all(m.as_bytes()).unwrap();
-                Coroutine::sched();
             }
             ()
         }
@@ -78,18 +76,11 @@ fn actor_body_is_executed_for_every_message() {
 
     supervisor.send_message(pid_steve, json_msg).unwrap();
 
-    thread::sleep_ms(1001);
-    let mut message_output_file = File::open("/tmp/steve-test.json").unwrap();
-    let mut message_output = String::new();
-    message_output_file.read_to_string(&mut message_output).unwrap();
-    remove_file("/tmp/steve-test.json").unwrap();
+    let second_message = "{\"imnot\": \"yourfriend\"}".to_json();
+    let second_message_clone = second_message.clone();
+    supervisor.send_message(pid_steve, second_message).unwrap();
 
-    let actual_json = Json::from_str(&message_output).unwrap();
-    assert_eq!(json_clone, actual_json);
-
-    let json_msg2 = "{\"imnot\": \"yourfriend\"}".to_json();
-    let json_clone2 = json_msg2.clone();
-    supervisor.send_message(pid_steve, json_msg2).unwrap();
+    run(1);
 
     thread::sleep_ms(1001);
     let mut message_output_file = File::open("/tmp/steve-test.json").unwrap();
@@ -98,7 +89,7 @@ fn actor_body_is_executed_for_every_message() {
     remove_file("/tmp/steve-test.json").unwrap();
 
     let actual_json = Json::from_str(&message_output).unwrap();
-    assert_eq!(json_clone2, actual_json);
+    assert_eq!(second_message_clone, actual_json);
 }
 
 // send_message tests
@@ -124,19 +115,22 @@ fn pid_can_be_used_to_send_message() {
     ).unwrap();
 
     supervisor.send_message(pid, "{:?}".to_json()).unwrap();
+    run(1);
 }
 
 // join tests
 #[test]
 fn pid_can_be_used_to_join_actor() {
     let supervisor = Supervisor::new("folks");
-    let start_time = now();
     let pid: Uuid = supervisor.spawn(
         "Bob",
-        |_| { thread::sleep_ms(1000); () }
+        |_| { coio::sleep_ms(1000); () }
     ).unwrap();
+
+    let start_time = now();
     assert!((start_time + Duration::milliseconds(1000)) > now());
 
+    run(1);
     supervisor.join(pid).unwrap();
 
     assert!((start_time + Duration::milliseconds(1000)) < now());
@@ -149,6 +143,8 @@ fn joining_actor_makes_it_unreachable() {
         "Bob",
         |_| { () }
     ).unwrap();
+    run(1);
+
     supervisor.join(pid).unwrap();
 
     let send_result = supervisor.send_message(pid, "{}".to_json());
@@ -164,7 +160,7 @@ fn error_is_returned_if_joining_actor_that_does_not_exist() {
     let supervisor = Supervisor::new("folks");
     let pid = Uuid::new_v4();
 
-    let join_result: WashedUpResult<State>= supervisor.join(pid);
+    let join_result: WashedUpResult<()>= supervisor.join(pid);
 
     match join_result {
         Ok(_) => panic!("Actor joined for non-existent PID"),

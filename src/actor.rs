@@ -1,14 +1,14 @@
 use std::fmt;
 
-use coroutine::Handle;
+use coio::scheduler::JoinHandle;
 use rustc_serialize::json::Json;
 use uuid::Uuid;
-use std::sync::mpsc::{
+use coio::sync::mpsc::{
     Sender,
 };
 
 pub struct Actor {
-    pub join_handle: Handle,
+    pub join_handle: JoinHandle<()>,
     pub mailbox: Sender<Json>,
     pub name: String,
     pub uuid: Uuid,
@@ -16,7 +16,7 @@ pub struct Actor {
 
 impl Actor {
     pub fn new(
-        join_handle: Handle,
+        join_handle: JoinHandle<()>,
         mailbox: Sender<Json>,
         name: String,
         uuid: Uuid,

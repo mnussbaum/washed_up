@@ -1,4 +1,4 @@
-extern crate coroutine;
+extern crate coio;
 #[macro_use] extern crate log;
 extern crate rustc_serialize;
 extern crate time;

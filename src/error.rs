@@ -19,6 +19,7 @@ use rustc_serialize::json::{
     Json,
 };
 use uuid::Uuid;
+use coros::CoroError;
 
 use actor::Actor;
 
@@ -28,6 +29,7 @@ pub enum WashedUpError<'a> {
     ActorSendError(SendError<Json>),
     ActorWriteLockPoisoned(PoisonError<RwLockWriteGuard<'a, HashMap<Uuid, Actor>>>),
     ActorPanic(&'a str),
+    CoroError(CoroError<'a>),
     InvalidPid(Uuid),
 }
 
@@ -42,6 +44,7 @@ impl<'a> WashedUpError<'a> {
                 "Supervisor's actor write lock poisoned"
             },
             WashedUpError::ActorPanic(ref err_as_string) => err_as_string,
+            WashedUpError::CoroError(ref err) => err.description(),
             WashedUpError::InvalidPid(_) => {
                 "PID does not map to a spawned actor"
             },
@@ -60,6 +63,7 @@ impl<'a> Error for WashedUpError<'a> {
             WashedUpError::ActorSendError(ref err) => Some(err),
             WashedUpError::ActorWriteLockPoisoned(_) => None,
             WashedUpError::ActorPanic(_) => None,
+            WashedUpError::CoroError(ref err) => Some(err),
             WashedUpError::InvalidPid(_) => None,
         }
     }
@@ -107,5 +111,11 @@ impl<'a> From<PoisonError<RwLockWriteGuard<'a, HashMap<Uuid, Actor>>>> for Washe
     fn from(err: PoisonError<RwLockWriteGuard<'a, HashMap<Uuid, Actor>>>) -> WashedUpError<'a> {
         error!("Error obtaining actor write lock {:?}", err);
         WashedUpError::ActorWriteLockPoisoned(err)
+    }
+}
+
+impl<'a> From<CoroError<'a>> for WashedUpError<'a> {
+    fn from(err: CoroError<'a>) -> WashedUpError<'a> {
+        WashedUpError::CoroError(err)
     }
 }

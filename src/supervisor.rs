@@ -4,18 +4,16 @@ use std::collections::{
 use std::fmt;
 use std::sync::{
     Arc,
+    Mutex,
     RwLock,
 };
-
-use coio::{
-    Builder,
-};
-use coio::sync::{
-    Mutex,
-};
-use coio::sync::mpsc::{
+use std::sync::mpsc::{
     channel,
     Receiver,
+};
+
+use coros::{
+    Pool,
 };
 use rustc_serialize::json::{
     Json,
@@ -29,6 +27,7 @@ use error::WashedUpError;
 #[derive(Debug)]
 pub struct Supervisor {
     actors: RwLock<HashMap<Uuid, Actor>>,
+    actor_pool: Pool,
     pub name: String,
 }
 
@@ -40,8 +39,11 @@ impl fmt::Display for Supervisor {
 
 impl Supervisor {
     pub fn new(name: &str) -> Supervisor {
+        let pool = Pool::new(name.to_string(), 4);
+        pool.start().unwrap();
         let supervisor = Supervisor {
             actors: RwLock::new(HashMap::new()),
+            actor_pool: pool,
             name: name.to_string(),
         };
         info!("Instantiating new {:?}", supervisor);
@@ -53,7 +55,7 @@ impl Supervisor {
         let mut actors = try!(self.actors.write());
         match actors.remove(&pid) {
             Some(actor) => {
-                Ok(try!(actor.join_handle.join()))
+                Ok(try!(actor.join_handle.join().unwrap()))
             },
             None => Err(WashedUpError::InvalidPid(pid)),
         }
@@ -76,7 +78,7 @@ impl Supervisor {
         let arc_body = Arc::new(Mutex::new(body));
 
         let mut actors = try!(self.actors.write());
-        let actor_handle = Builder::new().name(Some(pid.to_string())).spawn(move || {
+        let actor_handle = self.actor_pool.spawn(move || {
             arc_body.lock().unwrap()(mailbox_receiver);
         });
 

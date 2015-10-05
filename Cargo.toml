@@ -10,8 +10,7 @@ keywords = ["actor", "concurrency"]
 
 
 [dependencies]
-
-coio = { git = "https://github.com/zonyitoo/coio-rs.git" }
+coros = { path = "/Users/mnussbaum/src/rust/coros" }
 log = "0.3.1"
 rustc-serialize = "0.3"
 time = "0.1.32"

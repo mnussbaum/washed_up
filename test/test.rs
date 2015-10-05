@@ -1,4 +1,3 @@
-extern crate coio;
 extern crate rustc_serialize;
 extern crate time;
 extern crate uuid;
@@ -15,9 +14,6 @@ use std::thread;
 use time::{
     now,
     Duration
-};
-use coio::{
-    run,
 };
 use rustc_serialize::json::{
     Json,
@@ -46,7 +42,6 @@ fn the_body_actor_callback_is_executed() {
     ).unwrap();
 
     supervisor.send_message(pid_bob, json_msg).unwrap();
-    run(1);
 
     thread::sleep_ms(1001);
     let mut message_output_file = File::open("/tmp/bob-test.json").unwrap();
@@ -79,8 +74,6 @@ fn actor_body_is_executed_for_every_message() {
     let second_message = "{\"imnot\": \"yourfriend\"}".to_json();
     let second_message_clone = second_message.clone();
     supervisor.send_message(pid_steve, second_message).unwrap();
-
-    run(1);
 
     thread::sleep_ms(1001);
     let mut message_output_file = File::open("/tmp/steve-test.json").unwrap();
@@ -115,7 +108,6 @@ fn pid_can_be_used_to_send_message() {
     ).unwrap();
 
     supervisor.send_message(pid, "{:?}".to_json()).unwrap();
-    run(1);
 }
 
 // join tests
@@ -124,13 +116,12 @@ fn pid_can_be_used_to_join_actor() {
     let supervisor = Supervisor::new("folks");
     let pid: Uuid = supervisor.spawn(
         "Bob",
-        |_| { coio::sleep_ms(1000); () }
+        |_| { thread::sleep_ms(1000); () }
     ).unwrap();
 
     let start_time = now();
     assert!((start_time + Duration::milliseconds(1000)) > now());
 
-    run(1);
     supervisor.join(pid).unwrap();
 
     assert!((start_time + Duration::milliseconds(1000)) < now());
@@ -143,7 +134,6 @@ fn joining_actor_makes_it_unreachable() {
         "Bob",
         |_| { () }
     ).unwrap();
-    run(1);
 
     supervisor.join(pid).unwrap();
 

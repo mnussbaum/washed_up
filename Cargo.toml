@@ -10,7 +10,7 @@ keywords = ["actor", "concurrency"]
 
 
 [dependencies]
-coros = { path = "/Users/mnussbaum/src/rust/coros" }
+coros = { git = "https://github.com/mnussbaum/coros.git" }
 log = "0.3.1"
 rustc-serialize = "0.3"
 time = "0.1.32"

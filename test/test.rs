@@ -29,7 +29,7 @@ use washed_up::supervisor::{
 // spawn tests
 #[test]
 fn the_body_actor_callback_is_executed() {
-    let supervisor = Supervisor::new("folks");
+    let mut supervisor = Supervisor::new("folks");
     let json_msg = "{\"hi\": \"friend\"}".to_json();
     let json_clone = json_msg.clone();
     let pid_bob: Uuid = supervisor.spawn(
@@ -55,7 +55,7 @@ fn the_body_actor_callback_is_executed() {
 
 #[test]
 fn actor_body_is_executed_for_every_message() {
-    let supervisor = Supervisor::new("folks");
+    let mut supervisor = Supervisor::new("folks");
     let json_msg = "{\"hi\": \"friend\"}".to_json();
     let pid_steve: Uuid = supervisor.spawn(
         "steve",
@@ -101,7 +101,7 @@ fn error_is_returned_if_message_sent_for_pid_that_does_not_exist() {
 
 #[test]
 fn pid_can_be_used_to_send_message() {
-    let supervisor = Supervisor::new("folks");
+    let mut supervisor = Supervisor::new("folks");
     let pid: Uuid = supervisor.spawn(
         "Bob",
         |r| { r.recv().unwrap(); () }
@@ -113,7 +113,7 @@ fn pid_can_be_used_to_send_message() {
 // join tests
 #[test]
 fn pid_can_be_used_to_join_actor() {
-    let supervisor = Supervisor::new("folks");
+    let mut supervisor = Supervisor::new("folks");
     let pid: Uuid = supervisor.spawn(
         "Bob",
         |_| { thread::sleep_ms(1000); () }
@@ -129,7 +129,7 @@ fn pid_can_be_used_to_join_actor() {
 
 #[test]
 fn joining_actor_makes_it_unreachable() {
-    let supervisor = Supervisor::new("folks");
+    let mut supervisor = Supervisor::new("folks");
     let pid: Uuid = supervisor.spawn(
         "Bob",
         |_| { () }

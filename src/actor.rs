@@ -1,6 +1,6 @@
 use std::fmt;
 
-use coros::CoroutineJoinHandle;
+use coros::JoinHandle;
 use rustc_serialize::json::Json;
 use uuid::Uuid;
 use std::sync::mpsc::{
@@ -8,7 +8,7 @@ use std::sync::mpsc::{
 };
 
 pub struct Actor {
-    pub join_handle: CoroutineJoinHandle<()>,
+    pub join_handle: JoinHandle<()>,
     pub mailbox: Sender<Json>,
     pub name: String,
     pub uuid: Uuid,
@@ -16,7 +16,7 @@ pub struct Actor {
 
 impl Actor {
     pub fn new(
-        join_handle: CoroutineJoinHandle<()>,
+        join_handle: JoinHandle<()>,
         mailbox: Sender<Json>,
         name: String,
         uuid: Uuid,

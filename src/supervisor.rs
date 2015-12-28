@@ -39,7 +39,7 @@ impl fmt::Display for Supervisor {
 
 impl Supervisor {
     pub fn new(name: &str) -> Supervisor {
-        let pool = Pool::new(name.to_string(), 4);
+        let mut pool = Pool::new(name.to_string(), 4).unwrap();
         pool.start().unwrap();
         let supervisor = Supervisor {
             actors: RwLock::new(HashMap::new()),
@@ -54,9 +54,7 @@ impl Supervisor {
     pub fn join(&self, pid : Uuid) -> Result<()> {
         let mut actors = try!(self.actors.write());
         match actors.remove(&pid) {
-            Some(actor) => {
-                Ok(try!(actor.join_handle.join().unwrap()))
-            },
+            Some(mut actor) => Ok(try!(actor.join_handle.join())),
             None => Err(WashedUpError::InvalidPid(pid)),
         }
     }
@@ -71,16 +69,16 @@ impl Supervisor {
         }
     }
 
-    pub fn spawn<F>(&self, actor_name: &str, body: F) -> Result<Uuid>
+    pub fn spawn<F>(&mut self, actor_name: &str, body: F) -> Result<Uuid>
         where F : 'static + Sync + Send + Fn(Receiver<Json>) -> () {
         let pid = Uuid::new_v4();
         let (mailbox_sender, mailbox_receiver) = channel();
         let arc_body = Arc::new(Mutex::new(body));
 
         let mut actors = try!(self.actors.write());
-        let actor_handle = self.actor_pool.spawn(move || {
+        let actor_handle = self.actor_pool.spawn(move |_| {
             arc_body.lock().unwrap()(mailbox_receiver);
-        });
+        }, 1024*1024).unwrap();
 
         actors.insert(pid, Actor::new(
             actor_handle,

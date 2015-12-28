@@ -10,6 +10,7 @@ use std::fs::{
     File,
 };
 use std::io::prelude::*;
+use std::time::Duration as StdDuration;
 use std::thread;
 use time::{
     now,
@@ -43,7 +44,7 @@ fn the_body_actor_callback_is_executed() {
 
     supervisor.send_message(pid_bob, json_msg).unwrap();
 
-    thread::sleep_ms(1001);
+    thread::sleep(StdDuration::from_millis(1001));
     let mut message_output_file = File::open("/tmp/bob-test.json").unwrap();
     let mut message_output = String::new();
     message_output_file.read_to_string(&mut message_output).unwrap();
@@ -60,7 +61,7 @@ fn actor_body_is_executed_for_every_message() {
     let pid_steve: Uuid = supervisor.spawn(
         "steve",
         |receiver| {
-            for _ in (0..2) {
+            for _ in 0..2 {
                 let m = receiver.recv().unwrap().to_string();
                 let mut message_output_file = File::create("/tmp/steve-test.json").unwrap();
                 message_output_file.write_all(m.as_bytes()).unwrap();
@@ -75,7 +76,7 @@ fn actor_body_is_executed_for_every_message() {
     let second_message_clone = second_message.clone();
     supervisor.send_message(pid_steve, second_message).unwrap();
 
-    thread::sleep_ms(1001);
+    thread::sleep(StdDuration::from_millis(1001));
     let mut message_output_file = File::open("/tmp/steve-test.json").unwrap();
     let mut message_output = String::new();
     message_output_file.read_to_string(&mut message_output).unwrap();
@@ -116,7 +117,7 @@ fn pid_can_be_used_to_join_actor() {
     let mut supervisor = Supervisor::new("folks");
     let pid: Uuid = supervisor.spawn(
         "Bob",
-        |_| { thread::sleep_ms(1000); () }
+        |_| { thread::sleep(StdDuration::from_millis(1000)); () }
     ).unwrap();
 
     let start_time = now();

@@ -158,3 +158,12 @@ fn error_is_returned_if_joining_actor_that_does_not_exist() {
         Err(e) => assert_eq!(e.description(), "PID does not map to a spawned actor"),
     }
 }
+
+#[test]
+fn actors_trap_panics() {
+    let mut supervisor = Supervisor::new("folks");
+    supervisor.spawn(
+        "Bob",
+        |_| { panic!("boom!"); }
+    ).unwrap();
+}

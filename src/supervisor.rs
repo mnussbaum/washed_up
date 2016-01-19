@@ -2,9 +2,14 @@ use std::collections::{
     HashMap,
 };
 use std::fmt;
+use std::panic::{
+    AssertRecoverSafe,
+    RecoverSafe,
+};
 use std::sync::{
     Arc,
     Mutex,
+    MutexGuard,
     RwLock,
 };
 use std::sync::mpsc::{
@@ -54,7 +59,7 @@ impl Supervisor {
     pub fn join(&self, pid : Uuid) -> Result<()> {
         let mut actors = try!(self.actors.write());
         match actors.remove(&pid) {
-            Some(mut actor) => Ok(try!(actor.join_handle.join())),
+            Some(mut actor) => Ok(try!(actor.join_handle.join().unwrap())),
             None => Err(WashedUpError::InvalidPid(pid)),
         }
     }
@@ -70,14 +75,15 @@ impl Supervisor {
     }
 
     pub fn spawn<F>(&mut self, actor_name: &str, body: F) -> Result<Uuid>
-        where F : 'static + Sync + Send + Fn(Receiver<Json>) -> () {
+        where F : 'static + Sync + Send + RecoverSafe + Fn(MutexGuard<Receiver<Json>>) -> () {
         let pid = Uuid::new_v4();
         let (mailbox_sender, mailbox_receiver) = channel();
-        let arc_body = Arc::new(Mutex::new(body));
+        let safe_mailbox_receiver = AssertRecoverSafe::new(Arc::new(Mutex::new(mailbox_receiver)));
 
         let mut actors = try!(self.actors.write());
         let actor_handle = self.actor_pool.spawn(move |_| {
-            arc_body.lock().unwrap()(mailbox_receiver);
+            let actor_result = body((safe_mailbox_receiver).lock().unwrap());
+            actor_result
         }, 1024*1024).unwrap();
 
         actors.insert(pid, Actor::new(

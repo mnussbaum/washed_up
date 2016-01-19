@@ -1,3 +1,5 @@
+#![feature(recover)]
+
 extern crate coros;
 #[macro_use] extern crate log;
 extern crate rustc_serialize;

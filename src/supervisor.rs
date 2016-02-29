@@ -12,13 +12,12 @@ use std::sync::{
     MutexGuard,
     RwLock,
 };
-use std::sync::mpsc::{
-    channel,
-    Receiver,
-};
 
 use coros::{
+    channel,
+    IoHandle,
     Pool,
+    Receiver,
 };
 use rustc_serialize::json::{
     Json,
@@ -75,14 +74,14 @@ impl Supervisor {
     }
 
     pub fn spawn<F>(&mut self, actor_name: &str, body: F) -> Result<Uuid>
-        where F : 'static + Sync + Send + RecoverSafe + Fn(MutexGuard<Receiver<Json>>) -> () {
+        where F : 'static + Sync + Send + RecoverSafe + Fn(IoHandle, MutexGuard<Receiver<Json>>) -> () {
         let pid = Uuid::new_v4();
-        let (mailbox_sender, mailbox_receiver) = channel();
+        let (mailbox_sender, mailbox_receiver) = channel::new();
         let safe_mailbox_receiver = AssertRecoverSafe::new(Arc::new(Mutex::new(mailbox_receiver)));
 
         let mut actors = try!(self.actors.write());
-        let actor_handle = self.actor_pool.spawn(move |_| {
-            let actor_result = body((safe_mailbox_receiver).lock().unwrap());
+        let actor_handle = self.actor_pool.spawn(move |io_handle| {
+            let actor_result = body(io_handle, safe_mailbox_receiver.lock().unwrap());
             actor_result
         }, 1024*1024).unwrap();
 

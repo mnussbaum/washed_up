@@ -35,9 +35,10 @@ fn the_body_actor_callback_is_executed() {
     let json_clone = json_msg.clone();
     let pid_bob: Uuid = supervisor.spawn(
         "Bob",
-        |receiver| {
+        |mut io_handle, receiver| {
             let mut message_output_file = File::create("/tmp/bob-test.json").unwrap();
-            message_output_file.write_all(receiver.recv().unwrap().to_string().as_bytes()).unwrap();
+            let message = io_handle.recv(&receiver).unwrap().to_string();
+            message_output_file.write_all(message.as_bytes()).unwrap();
             ()
         }
     ).unwrap();
@@ -60,10 +61,10 @@ fn actor_body_is_executed_for_every_message() {
     let json_msg = "{\"hi\": \"friend\"}".to_json();
     let pid_steve: Uuid = supervisor.spawn(
         "steve",
-        |receiver| {
+        |mut io_handle, receiver| {
             for _ in 0..2 {
-                let m = receiver.recv().unwrap().to_string();
                 let mut message_output_file = File::create("/tmp/steve-test.json").unwrap();
+                let m = io_handle.recv(&receiver).unwrap().to_string();
                 message_output_file.write_all(m.as_bytes()).unwrap();
             }
             ()
@@ -105,10 +106,11 @@ fn pid_can_be_used_to_send_message() {
     let mut supervisor = Supervisor::new("folks");
     let pid: Uuid = supervisor.spawn(
         "Bob",
-        |r| { r.recv().unwrap(); () }
+        |mut i, r| { i.recv(&r).unwrap(); }
     ).unwrap();
 
-    supervisor.send_message(pid, "{:?}".to_json()).unwrap();
+    supervisor.send_message(pid, "{Hi:\"friend\"}".to_json()).unwrap();
+    supervisor.join(pid).unwrap();
 }
 
 // join tests
@@ -117,7 +119,7 @@ fn pid_can_be_used_to_join_actor() {
     let mut supervisor = Supervisor::new("folks");
     let pid: Uuid = supervisor.spawn(
         "Bob",
-        |_| { thread::sleep(StdDuration::from_millis(1000)); () }
+        |_, _| { thread::sleep(StdDuration::from_millis(1000)); () }
     ).unwrap();
 
     let start_time = now();
@@ -133,7 +135,7 @@ fn joining_actor_makes_it_unreachable() {
     let mut supervisor = Supervisor::new("folks");
     let pid: Uuid = supervisor.spawn(
         "Bob",
-        |_| { () }
+        |_, _| { () }
     ).unwrap();
 
     supervisor.join(pid).unwrap();
@@ -164,6 +166,6 @@ fn actors_trap_panics() {
     let mut supervisor = Supervisor::new("folks");
     supervisor.spawn(
         "Bob",
-        |_| { panic!("boom!"); }
+        |_, _| { panic!("boom!"); }
     ).unwrap();
 }

@@ -1,11 +1,11 @@
 use std::fmt;
 
-use coros::JoinHandle;
-use rustc_serialize::json::Json;
-use uuid::Uuid;
-use std::sync::mpsc::{
+use coros::{
+    JoinHandle,
     Sender,
 };
+use rustc_serialize::json::Json;
+use uuid::Uuid;
 
 pub struct Actor {
     pub join_handle: JoinHandle<()>,
